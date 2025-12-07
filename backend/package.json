@@ -1,0 +1,27 @@
+{
+  "name": "fraud-insurance-backend",
+  "version": "1.0.0",
+  "description": "Backend for fraud detection insurance system",
+  "main": "index.js",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "deploy": "hardhat run scripts/deploy.js",
+    "node": "hardhat node",
+    "clean": "hardhat clean",
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^4.9.3",
+    "axios": "^1.6.2",
+    "dotenv": "^16.3.1",
+    "ethers": "^6.9.0",
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^3.0.0",
+    "hardhat": "^2.19.2"
+  }
+}

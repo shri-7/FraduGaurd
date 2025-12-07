@@ -1,0 +1,30 @@
+{
+  "name": "fraudgaurd",
+  "version": "1.0.0",
+  "description": "Fraud Detection in Privacy Preserving Health Insurance using Blockchain",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "install:frontend": "cd frontend && npm install",
+    "install:backend": "cd backend && npm install",
+    "install:all": "npm run install:frontend && npm run install:backend",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:backend": "cd backend && npm run node",
+    "build:frontend": "cd frontend && npm run build",
+    "test:backend": "cd backend && npm run test",
+    "compile:backend": "cd backend && npm run compile"
+  },
+  "keywords": [
+    "blockchain",
+    "fraud-detection",
+    "healthcare",
+    "insurance",
+    "ethereum",
+    "smart-contracts"
+  ],
+  "author": "",
+  "license": "MIT"
+}
