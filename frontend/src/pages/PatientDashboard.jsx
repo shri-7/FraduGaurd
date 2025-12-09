@@ -54,19 +54,34 @@ export default function PatientDashboard() {
   };
 
   const getFraudLevelColor = (level) => {
+    if (typeof level === 'string') {
+      switch (level) {
+        case 'LOW':
+          return 'bg-green-100 text-green-800 border border-green-300';
+        case 'MEDIUM':
+          return 'bg-yellow-100 text-yellow-800 border border-yellow-300';
+        case 'HIGH':
+          return 'bg-red-100 text-red-800 border border-red-300';
+        default:
+          return 'bg-gray-100 text-gray-800';
+      }
+    }
     switch (level) {
       case 0: // LOW
-        return 'bg-green-100 text-green-800';
+        return 'bg-green-100 text-green-800 border border-green-300';
       case 1: // MEDIUM
-        return 'bg-yellow-100 text-yellow-800';
+        return 'bg-yellow-100 text-yellow-800 border border-yellow-300';
       case 2: // HIGH
-        return 'bg-red-100 text-red-800';
+        return 'bg-red-100 text-red-800 border border-red-300';
       default:
         return 'bg-gray-100 text-gray-800';
     }
   };
 
   const getFraudLevelText = (level) => {
+    if (typeof level === 'string') {
+      return level;
+    }
     switch (level) {
       case 0:
         return 'Low';
@@ -108,19 +123,19 @@ export default function PatientDashboard() {
           <div className="bg-white p-6 rounded-lg shadow">
             <p className="text-gray-600 text-sm mb-2">Pending</p>
             <p className="text-3xl font-bold text-yellow-600">
-              {claims.filter((c) => c.status === 0).length}
+              {claims.filter((c) => c.status === 'PENDING' || c.status === 0).length}
             </p>
           </div>
           <div className="bg-white p-6 rounded-lg shadow">
             <p className="text-gray-600 text-sm mb-2">Approved</p>
             <p className="text-3xl font-bold text-green-600">
-              {claims.filter((c) => c.status === 1).length}
+              {claims.filter((c) => c.status === 'APPROVED' || c.status === 1).length}
             </p>
           </div>
           <div className="bg-white p-6 rounded-lg shadow">
             <p className="text-gray-600 text-sm mb-2">Rejected</p>
             <p className="text-3xl font-bold text-red-600">
-              {claims.filter((c) => c.status === 2).length}
+              {claims.filter((c) => c.status === 'REJECTED' || c.status === 2).length}
             </p>
           </div>
         </div>
@@ -151,7 +166,7 @@ export default function PatientDashboard() {
                       Claim ID
                     </th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-                      Amount
+                      Amount (₹)
                     </th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
                       Type
@@ -173,8 +188,8 @@ export default function PatientDashboard() {
                       <td className="px-6 py-4 text-sm text-gray-900 font-mono">
                         {claim.id?.slice(0, 8)}...
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-900">
-                        {(claim.amount / 1e18).toFixed(2)} ETH
+                      <td className="px-6 py-4 text-sm text-gray-900 font-semibold">
+                        ₹ {claim.amountInr?.toLocaleString() || (claim.amount / 1e18).toFixed(2)}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-900">
                         {claim.claimType}
@@ -185,29 +200,27 @@ export default function PatientDashboard() {
                             claim.fraudLevel
                           )}`}
                         >
-                          {getFraudLevelText(claim.fraudLevel)} ({claim.fraudScore})
+                          {getFraudLevelText(claim.fraudLevel)} ({claim.fraudScore}/100)
                         </span>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
                           {getStatusIcon(claim.status)}
                           <span className="text-sm text-gray-900">
-                            {getStatusText(claim.status)}
+                            {claim.status === 'PENDING' || claim.status === 0 ? 'Pending' :
+                             claim.status === 'APPROVED' || claim.status === 1 ? 'Approved' :
+                             claim.status === 'REJECTED' || claim.status === 2 ? 'Rejected' : 'Unknown'}
                           </span>
                         </div>
                       </td>
-                      <td className="px-6 py-4">
-                        {claim.ipfsUrl && (
-                          <a
-                            href={claim.ipfsUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-600 hover:text-blue-700 flex items-center gap-1"
-                          >
-                            <ExternalLink className="w-4 h-4" />
-                            View
-                          </a>
-                        )}
+                      <td className="px-6 py-4 flex gap-2">
+                        <Link
+                          to={`/patient/claims/${claim.id}`}
+                          className="text-blue-600 hover:text-blue-700 flex items-center gap-1 font-semibold"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                          Track
+                        </Link>
                       </td>
                     </tr>
                   ))}

@@ -81,19 +81,34 @@ export default function ProviderDashboard() {
   };
 
   const getFraudLevelColor = (level) => {
+    if (typeof level === 'string') {
+      switch (level) {
+        case 'LOW':
+          return 'bg-green-100 text-green-800 border border-green-300';
+        case 'MEDIUM':
+          return 'bg-yellow-100 text-yellow-800 border border-yellow-300';
+        case 'HIGH':
+          return 'bg-red-100 text-red-800 border border-red-300';
+        default:
+          return 'bg-gray-100 text-gray-800';
+      }
+    }
     switch (level) {
       case 0:
-        return 'bg-green-100 text-green-800';
+        return 'bg-green-100 text-green-800 border border-green-300';
       case 1:
-        return 'bg-yellow-100 text-yellow-800';
+        return 'bg-yellow-100 text-yellow-800 border border-yellow-300';
       case 2:
-        return 'bg-red-100 text-red-800';
+        return 'bg-red-100 text-red-800 border border-red-300';
       default:
         return 'bg-gray-100 text-gray-800';
     }
   };
 
   const getFraudLevelText = (level) => {
+    if (typeof level === 'string') {
+      return level;
+    }
     switch (level) {
       case 0:
         return 'Low';
@@ -109,13 +124,13 @@ export default function ProviderDashboard() {
   // Calculate statistics
   const stats = {
     total: claims.length,
-    pending: claims.filter((c) => c.status === 0).length,
-    approved: claims.filter((c) => c.status === 1).length,
-    rejected: claims.filter((c) => c.status === 2).length,
-    flagged: claims.filter((c) => c.flagged).length,
-    highRisk: claims.filter((c) => c.fraudLevel === 2).length,
-    mediumRisk: claims.filter((c) => c.fraudLevel === 1).length,
-    lowRisk: claims.filter((c) => c.fraudLevel === 0).length,
+    pending: claims.filter((c) => c.status === 'PENDING' || c.status === 'PENDING_PROVIDER' || c.status === 0).length,
+    approved: claims.filter((c) => c.status === 'APPROVED' || c.status === 'PROVIDER_APPROVED' || c.status === 1).length,
+    rejected: claims.filter((c) => c.status === 'REJECTED' || c.status === 'PROVIDER_REJECTED' || c.status === 2).length,
+    flagged: claims.filter((c) => c.fraudLevel === 'HIGH' || c.fraudLevel === 2).length,
+    highRisk: claims.filter((c) => c.fraudLevel === 'HIGH' || c.fraudLevel === 2).length,
+    mediumRisk: claims.filter((c) => c.fraudLevel === 'MEDIUM' || c.fraudLevel === 1).length,
+    lowRisk: claims.filter((c) => c.fraudLevel === 'LOW' || c.fraudLevel === 0).length,
   };
 
   const fraudLevelData = [
@@ -220,7 +235,7 @@ export default function ProviderDashboard() {
             <div className="p-8 text-center">
               <p className="text-gray-600">Loading claims...</p>
             </div>
-          ) : claims.filter((c) => c.status === 0).length === 0 ? (
+          ) : claims.filter((c) => c.status === 'PENDING' || c.status === 'PENDING_PROVIDER' || c.status === 0).length === 0 ? (
             <div className="p-8 text-center">
               <p className="text-gray-600">No pending claims</p>
             </div>
@@ -236,7 +251,7 @@ export default function ProviderDashboard() {
                       Patient
                     </th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-                      Amount
+                      Amount (₹)
                     </th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
                       Type
@@ -251,17 +266,17 @@ export default function ProviderDashboard() {
                 </thead>
                 <tbody className="divide-y">
                   {claims
-                    .filter((c) => c.status === 0)
+                    .filter((c) => c.status === 'PENDING' || c.status === 'PENDING_PROVIDER' || c.status === 0)
                     .map((claim) => (
                       <tr key={claim.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 text-sm text-gray-900 font-mono">
                           {claim.id?.slice(0, 8)}...
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-900 font-mono">
-                          {claim.patient?.slice(0, 6)}...
+                          {claim.patientAddress?.slice(0, 6)}...{claim.patientAddress?.slice(-4)}
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-900">
-                          {(claim.amount / 1e18).toFixed(2)} ETH
+                        <td className="px-6 py-4 text-sm text-gray-900 font-semibold">
+                          ₹ {claim.amountInr?.toLocaleString() || (claim.amount / 1e18).toFixed(2)}
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-900">
                           {claim.claimType}
@@ -272,7 +287,7 @@ export default function ProviderDashboard() {
                               claim.fraudLevel
                             )}`}
                           >
-                            {getFraudLevelText(claim.fraudLevel)} ({claim.fraudScore})
+                            {getFraudLevelText(claim.fraudLevel)} ({claim.fraudScore}/100)
                           </span>
                         </td>
                         <td className="px-6 py-4">

@@ -73,7 +73,7 @@ function checkIdentityFraud(newPatient, existingPatients = []) {
       existing.nationalId &&
       existing.nationalId === newPatient.nationalId
     ) {
-      score = 100;
+      score = 50; // Reduced from 100
       flags.push("DUPLICATE_NATIONAL_ID");
       reasons.push(
         `Exact match found with patient: ${existing.name} (${existing.email})`
@@ -82,13 +82,13 @@ function checkIdentityFraud(newPatient, existingPatients = []) {
     }
 
     if (existing.email && existing.email === newPatient.email) {
-      score = Math.max(score, 85);
+      score = Math.max(score, 42); // Reduced from 85
       flags.push("DUPLICATE_EMAIL");
       reasons.push(`Email already registered: ${existing.email}`);
     }
 
     if (existing.phone && existing.phone === newPatient.phone) {
-      score = Math.max(score, 80);
+      score = Math.max(score, 40); // Reduced from 80
       flags.push("DUPLICATE_PHONE");
       reasons.push(`Phone already registered: ${existing.phone}`);
     }
@@ -97,7 +97,7 @@ function checkIdentityFraud(newPatient, existingPatients = []) {
     if (existing.name && newPatient.name) {
       const similarity = levenshteinSimilarity(existing.name, newPatient.name);
       if (similarity > 0.85) {
-        score = Math.max(score, 70);
+        score = Math.max(score, 35); // Reduced from 70
         flags.push("SIMILAR_NAME");
         reasons.push(
           `Similar name found: ${existing.name} (similarity: ${(similarity * 100).toFixed(1)}%)`
@@ -110,128 +110,122 @@ function checkIdentityFraud(newPatient, existingPatients = []) {
 }
 
 /**
- * Score claim risk based on various factors
- * @param {Object} claim - Claim data
- * @param {Object} patient - Patient data
- * @param {Array} patientHistory - Array of patient's previous claims
- * @returns {Object} - { score: 0-100, level: "LOW"|"MEDIUM"|"HIGH", flags: [], reasons: [] }
+ * NEW SIMPLIFIED FRAUD SCORING ALGORITHM (INR-based)
+ * Score range: 0-100
+ * 0-30: LOW RISK
+ * 31-60: MEDIUM RISK
+ * 61-100: HIGH RISK (Fraud)
  */
-function scoreClaimRisk(claim, patient = {}, patientHistory = []) {
+function scoreClaimRisk(claim, patient = {}, patientHistory = [], providerData = {}) {
   let score = 0;
   const flags = [];
   const reasons = [];
 
-  // Rule 1: High amount check
-  if (claim.amount > THRESHOLDS.HIGH_AMOUNT_THRESHOLD) {
-    const excessAmount = claim.amount - THRESHOLDS.HIGH_AMOUNT_THRESHOLD;
-    const percentageOver = (excessAmount / THRESHOLDS.HIGH_AMOUNT_THRESHOLD) * 100;
-    const amountScore = Math.min(40, percentageOver / 2.5);
-    score += amountScore;
-    flags.push("HIGH_AMOUNT");
-    reasons.push(
-      `Claim amount (${claim.amount}) exceeds threshold (${THRESHOLDS.HIGH_AMOUNT_THRESHOLD})`
-    );
+  // Rule 1: Amount in INR
+  const amountInr = claim.amountInr || claim.amount || 0;
+  if (amountInr > 100000) {
+    score += 25; // Reduced from 50
+    flags.push("HIGH_AMOUNT_100K");
+    reasons.push(`Amount ₹${amountInr} exceeds ₹100,000`);
+  } else if (amountInr > 50000) {
+    score += 15; // Reduced from 30
+    flags.push("HIGH_AMOUNT_50K");
+    reasons.push(`Amount ₹${amountInr} exceeds ₹50,000`);
   }
 
-  // Rule 2: Frequent claims check
+  // Rule 2: Claim Type
+  if (claim.claimType === "SURGERY") {
+    score += 10; // Reduced from 20
+    flags.push("SURGERY_CLAIM");
+    reasons.push("Surgery claims have higher fraud risk");
+  } else if (claim.claimType === "HOSPITALIZATION" || claim.claimType === "ACCIDENT") {
+    score += 5; // Reduced from 10
+    flags.push("HIGH_RISK_CLAIM_TYPE");
+    reasons.push(`${claim.claimType} claims require verification`);
+  }
+
+  // Rule 3: Missing or invalid attachments
+  const attachments = claim.attachments || [];
+  if (!attachments || attachments.length === 0) {
+    score += 10; // Reduced from 20
+    flags.push("NO_ATTACHMENTS");
+    reasons.push("No supporting documents uploaded");
+  } else {
+    // Check for valid file types
+    const validTypes = ["application/pdf", "image/jpeg", "image/png"];
+    const invalidAttachments = attachments.filter(
+      (a) => !validTypes.includes(a.mimeType)
+    );
+    if (invalidAttachments.length > 0) {
+      score += 15; // Reduced from 30
+      flags.push("INVALID_ATTACHMENT_TYPE");
+      reasons.push("Invalid document type uploaded");
+    }
+  }
+
+  // Rule 4: Frequent claims (>3 in 6 months)
   if (patientHistory && patientHistory.length > 0) {
-    const thirtyDaysAgo = Date.now() - THRESHOLDS.FREQUENT_CLAIMS_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+    const sixMonthsAgo = Date.now() - 180 * 24 * 60 * 60 * 1000;
     const recentClaims = patientHistory.filter((c) => {
       const claimDate = new Date(c.createdAt).getTime();
-      return claimDate > thirtyDaysAgo;
+      return claimDate > sixMonthsAgo;
     });
 
-    if (recentClaims.length >= THRESHOLDS.FREQUENT_CLAIMS_THRESHOLD) {
-      score += 30;
+    if (recentClaims.length > 3) {
+      score += 10; // Reduced from 20
       flags.push("FREQUENT_CLAIMS");
-      reasons.push(
-        `${recentClaims.length} claims in last ${THRESHOLDS.FREQUENT_CLAIMS_WINDOW_DAYS} days`
-      );
+      reasons.push(`${recentClaims.length} claims in last 6 months`);
     }
   }
 
-  // Rule 3: Early claim check (policy age)
-  if (patient.registeredAt) {
-    const policyAgeMs = Date.now() - new Date(patient.registeredAt).getTime();
-    const policyAgeDays = policyAgeMs / (24 * 60 * 60 * 1000);
-
-    if (policyAgeDays < THRESHOLDS.MIN_POLICY_AGE_DAYS) {
-      score += 25;
-      flags.push("EARLY_CLAIM");
-      reasons.push(
-        `Policy age (${policyAgeDays.toFixed(1)} days) is less than minimum (${THRESHOLDS.MIN_POLICY_AGE_DAYS} days)`
-      );
+  // Rule 5: Provider patterns
+  if (providerData && providerData.approvalRate !== undefined) {
+    if (providerData.approvalRate < 0.4) {
+      score += 5; // Reduced from 10
+      flags.push("LOW_PROVIDER_APPROVAL_RATE");
+      reasons.push(`Provider approval rate: ${(providerData.approvalRate * 100).toFixed(1)}%`);
     }
   }
 
-  // Determine fraud level
-  let fraudLevel = "LOW";
-  if (score >= 70) {
-    fraudLevel = "HIGH";
-  } else if (score >= 40) {
-    fraudLevel = "MEDIUM";
+  if (providerData && providerData.flaggedClaims > 0) {
+    score += 15; // Reduced from 30
+    flags.push("PROVIDER_FLAGGED_HISTORY");
+    reasons.push("Provider has history of flagged claims");
   }
 
   // Cap score at 100
   score = Math.min(score, 100);
 
+  // Determine fraud level based on new thresholds
+  let fraudLevel = "LOW";
+  if (score >= 61) {
+    fraudLevel = "HIGH";
+  } else if (score >= 31) {
+    fraudLevel = "MEDIUM";
+  }
+
   return { score, level: fraudLevel, flags, reasons };
 }
 
 /**
- * Evaluate complete claim for fraud
+ * Evaluate complete claim for fraud (SIMPLIFIED - uses only claim risk scoring)
  * @param {Object} claim - Claim data
  * @param {Object} patient - Patient data
- * @param {Object} history - { existingPatients: [], patientClaims: [] }
+ * @param {Object} history - { existingPatients: [], patientClaims: [], providerData: {} }
  * @returns {Object} - { fraudScore, fraudLevel, fraudFlags, reasons }
  */
 function evaluateClaim(claim, patient = {}, history = {}) {
-  const existingPatients = history.existingPatients || [];
   const patientClaims = history.patientClaims || [];
+  const providerData = history.providerData || {};
 
-  // Check identity fraud
-  const identityResult = checkIdentityFraud(patient, existingPatients);
-
-  // If identity fraud is detected, return high score immediately
-  if (identityResult.score >= 85) {
-    return {
-      fraudScore: identityResult.score,
-      fraudLevel: "HIGH",
-      fraudFlags: identityResult.flags,
-      reasons: identityResult.reasons,
-    };
-  }
-
-  // Score claim risk
-  const claimRiskResult = scoreClaimRisk(claim, patient, patientClaims);
-
-  // Combine scores
-  let combinedScore = 0;
-  const combinedFlags = [...identityResult.flags, ...claimRiskResult.flags];
-  const combinedReasons = [...identityResult.reasons, ...claimRiskResult.reasons];
-
-  if (identityResult.score > 0) {
-    combinedScore +=
-      (identityResult.score * THRESHOLDS.IDENTITY_FRAUD_SCORE_WEIGHT) / 100;
-  }
-
-  combinedScore +=
-    (claimRiskResult.score * THRESHOLDS.CLAIM_RISK_SCORE_WEIGHT) / 100;
-  combinedScore = Math.min(combinedScore, 100);
-
-  // Determine final fraud level
-  let fraudLevel = "LOW";
-  if (combinedScore >= 70) {
-    fraudLevel = "HIGH";
-  } else if (combinedScore >= 40) {
-    fraudLevel = "MEDIUM";
-  }
+  // Use simplified claim risk scoring
+  const claimRiskResult = scoreClaimRisk(claim, patient, patientClaims, providerData);
 
   return {
-    fraudScore: Math.round(combinedScore),
-    fraudLevel,
-    fraudFlags: [...new Set(combinedFlags)], // Remove duplicates
-    reasons: combinedReasons,
+    fraudScore: claimRiskResult.score,
+    fraudLevel: claimRiskResult.level,
+    fraudFlags: claimRiskResult.flags,
+    reasons: claimRiskResult.reasons,
   };
 }
 

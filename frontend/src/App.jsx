@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import Navbar from './components/Navbar';
+import { ProtectedRoute } from './components/ProtectedRoute';
 import { useAuthStore } from './store/authStore';
 
 // Pages
@@ -10,6 +11,7 @@ import Login from './pages/Login';
 import PatientRegister from './pages/PatientRegister';
 import PatientDashboard from './pages/PatientDashboard';
 import PatientNewClaim from './pages/PatientNewClaim';
+import PatientClaimDetail from './pages/PatientClaimDetail';
 import ProviderRegister from './pages/ProviderRegister';
 import ProviderDashboard from './pages/ProviderDashboard';
 import AdminDashboard from './pages/AdminDashboard';
@@ -30,24 +32,48 @@ function App() {
             <Route path="/patient/register" element={<PatientRegister />} />
             <Route 
               path="/patient/dashboard" 
-              element={isConnected && role === 'PATIENT' ? <PatientDashboard /> : <Navigate to="/login" />} 
+              element={
+                <ProtectedRoute requiredRole="PATIENT">
+                  <PatientDashboard />
+                </ProtectedRoute>
+              } 
             />
             <Route 
               path="/patient/claims/new" 
-              element={isConnected && role === 'PATIENT' ? <PatientNewClaim /> : <Navigate to="/login" />} 
+              element={
+                <ProtectedRoute requiredRole="PATIENT">
+                  <PatientNewClaim />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/patient/claims/:id" 
+              element={
+                <ProtectedRoute requiredRole="PATIENT">
+                  <PatientClaimDetail />
+                </ProtectedRoute>
+              } 
             />
 
             {/* Provider Routes */}
             <Route path="/provider/register" element={<ProviderRegister />} />
             <Route 
               path="/provider/dashboard" 
-              element={isConnected && role === 'PROVIDER' ? <ProviderDashboard /> : <Navigate to="/login" />} 
+              element={
+                <ProtectedRoute requiredRole="PROVIDER">
+                  <ProviderDashboard />
+                </ProtectedRoute>
+              } 
             />
 
             {/* Admin Routes */}
             <Route 
               path="/admin/dashboard" 
-              element={isConnected && role === 'SYS_ADMIN' ? <AdminDashboard /> : <Navigate to="/login" />} 
+              element={
+                <ProtectedRoute requiredRole="SYS_ADMIN">
+                  <AdminDashboard />
+                </ProtectedRoute>
+              } 
             />
           </Routes>
         </main>

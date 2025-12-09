@@ -38,6 +38,268 @@ app.get("/api/health", (req, res) => {
   });
 });
 
+// ==================== TEST DATA ROUTES ====================
+
+/**
+ * POST /api/test/init-data
+ * Initialize test data for development
+ */
+app.post("/api/test/init-data", (req, res) => {
+  try {
+    const patientWallet = process.env.PATIENT_WALLET || "0x48ed6173384a54be8aC87a6d2494Cbbc95ee2cd9";
+    const providerWallet = process.env.PROVIDER_WALLET || "0x69544704a202bCBBf125f55BD2aEb5fb2Cc7Ff6";
+
+    // Create test patient
+    const patient = dataStore.upsertUser({
+      role: "PATIENT",
+      name: "Test Patient",
+      email: "patient@test.com",
+      phone: "9876543210",
+      nationalId: "AAAA0000A",
+      dateOfBirth: "1990-01-01",
+      walletAddress: patientWallet,
+    });
+
+    // Create test provider
+    const provider = dataStore.upsertProvider({
+      name: "Test Insurance Provider",
+      contactEmail: "provider@test.com",
+      phone: "9876543211",
+      licenseNumber: "LIC123456",
+      approvalStatus: "APPROVED",
+      walletAddress: providerWallet,
+    });
+
+    // Create test claims
+    const testClaims = [
+      {
+        patientAddress: patientWallet,
+        providerAddress: providerWallet,
+        amountInr: 50000,
+        claimType: "Hospitalization",
+        description: "Emergency surgery",
+        status: "PENDING_PROVIDER",
+        fraudScore: 12,
+        fraudLevel: "LOW",
+        fraudFlags: [],
+      },
+      {
+        patientAddress: patientWallet,
+        providerAddress: providerWallet,
+        amountInr: 75000,
+        claimType: "Treatment",
+        description: "Cancer treatment",
+        status: "PENDING_PROVIDER",
+        fraudScore: 22,
+        fraudLevel: "LOW",
+        fraudFlags: ["high_amount"],
+      },
+      {
+        patientAddress: patientWallet,
+        providerAddress: providerWallet,
+        amountInr: 120000,
+        claimType: "Surgery",
+        description: "Cardiac surgery",
+        status: "PENDING_PROVIDER",
+        fraudScore: 8,
+        fraudLevel: "LOW",
+        fraudFlags: [],
+      },
+    ];
+
+    const createdClaims = testClaims.map((claim) => dataStore.createClaim(claim));
+
+    res.json({
+      success: true,
+      message: "Test data initialized",
+      patient,
+      provider,
+      claims: createdClaims,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== AUTH ROUTES ====================
+
+/**
+ * GET /api/auth/validate
+ * Validate user role and authorization
+ */
+app.get("/api/auth/validate", (req, res) => {
+  try {
+    const { walletAddress } = req.query;
+
+    if (!walletAddress) {
+      return res.status(400).json({ error: "walletAddress required" });
+    }
+
+    const sysAdminWallet = process.env.SYS_ADMIN_WALLET?.toLowerCase();
+    const providerWallet = process.env.PROVIDER_WALLET?.toLowerCase();
+    const patientWallet = process.env.PATIENT_WALLET?.toLowerCase();
+    const normalizedWallet = walletAddress.toLowerCase();
+
+    // Determine role based on wallet address
+    if (normalizedWallet === sysAdminWallet) {
+      return res.json({
+        isAuthorized: true,
+        role: "SYS_ADMIN",
+        walletAddress,
+      });
+    }
+
+    if (normalizedWallet === providerWallet) {
+      return res.json({
+        isAuthorized: true,
+        role: "PROVIDER",
+        walletAddress,
+      });
+    }
+
+    if (normalizedWallet === patientWallet) {
+      return res.json({
+        isAuthorized: true,
+        role: "PATIENT",
+        walletAddress,
+      });
+    }
+
+    // Default: treat as patient if wallet is registered
+    const patient = dataStore.getUserByWallet(walletAddress);
+    if (patient) {
+      return res.json({
+        isAuthorized: true,
+        role: "PATIENT",
+        walletAddress,
+        userId: patient.id,
+      });
+    }
+
+    // Default: treat as provider if wallet is registered
+    const provider = dataStore.getProviderByWallet(walletAddress);
+    if (provider) {
+      return res.json({
+        isAuthorized: true,
+        role: "PROVIDER",
+        walletAddress,
+        providerId: provider.id,
+      });
+    }
+
+    // Unknown wallet - default to patient role
+    res.json({
+      isAuthorized: true,
+      role: "PATIENT",
+      walletAddress,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/auth/patient-login
+ * Validate patient credentials (email + DoB + wallet)
+ */
+app.post("/api/auth/patient-login", (req, res) => {
+  try {
+    const { email, dateOfBirth, walletAddress } = req.body;
+
+    if (!email || !dateOfBirth || !walletAddress) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    // Check if this is the patient wallet
+    const patientWallet = process.env.PATIENT_WALLET?.toLowerCase();
+    if (walletAddress.toLowerCase() === patientWallet) {
+      return res.json({
+        success: true,
+        patient: {
+          id: "patient-1",
+          name: "Test Patient",
+          email: email,
+          walletAddress: walletAddress,
+        },
+      });
+    }
+
+    // Check if patient exists in dataStore
+    const patient = dataStore.getUserByWallet(walletAddress);
+    if (patient) {
+      return res.json({
+        success: true,
+        patient: {
+          id: patient.id,
+          name: patient.name,
+          email: patient.email,
+          walletAddress: patient.walletAddress,
+        },
+      });
+    }
+
+    // Patient not found - create default patient
+    res.json({
+      success: true,
+      patient: {
+        id: "patient-" + Date.now(),
+        name: "Patient",
+        email: email,
+        walletAddress: walletAddress,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/auth/provider-login
+ * Validate provider credentials (email + wallet)
+ */
+app.post("/api/auth/provider-login", (req, res) => {
+  try {
+    const { email, walletAddress } = req.body;
+
+    if (!email || !walletAddress) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    // Check if this is the provider wallet
+    const providerWallet = process.env.PROVIDER_WALLET?.toLowerCase();
+    if (walletAddress.toLowerCase() === providerWallet) {
+      return res.json({
+        success: true,
+        provider: {
+          id: "provider-1",
+          name: "Insurance Provider",
+          contactEmail: email,
+          walletAddress: walletAddress,
+        },
+      });
+    }
+
+    // Check if provider exists in dataStore
+    const provider = dataStore.getProviderByWallet(walletAddress);
+    if (provider) {
+      return res.json({
+        success: true,
+        provider: {
+          id: provider.id,
+          name: provider.name,
+          contactEmail: provider.contactEmail,
+          walletAddress: provider.walletAddress,
+        },
+      });
+    }
+
+    // Provider not found
+    return res.status(401).json({ error: "Provider not found" });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ==================== PATIENT ROUTES ====================
 
 /**
@@ -46,9 +308,9 @@ app.get("/api/health", (req, res) => {
  */
 app.post("/api/patient/register", async (req, res) => {
   try {
-    const { name, email, phone, nationalId, walletAddress } = req.body;
+    const { name, email, phone, nationalId, dateOfBirth, walletAddress } = req.body;
 
-    if (!name || !email || !phone || !nationalId || !walletAddress) {
+    if (!name || !email || !phone || !nationalId || !dateOfBirth || !walletAddress) {
       return res.status(400).json({ error: "Missing required fields" });
     }
 
@@ -66,6 +328,7 @@ app.post("/api/patient/register", async (req, res) => {
       email,
       phone,
       nationalId,
+      dateOfBirth,
       walletAddress,
     });
 
@@ -123,9 +386,9 @@ app.get("/api/patient/:walletAddress", (req, res) => {
  */
 app.post("/api/provider/register", async (req, res) => {
   try {
-    const { name, contactEmail, walletAddress } = req.body;
+    const { name, contactEmail, gstin, walletAddress } = req.body;
 
-    if (!name || !contactEmail || !walletAddress) {
+    if (!name || !contactEmail || !gstin || !walletAddress) {
       return res.status(400).json({ error: "Missing required fields" });
     }
 
@@ -133,8 +396,9 @@ app.post("/api/provider/register", async (req, res) => {
     const provider = dataStore.upsertProvider({
       name,
       contactEmail,
+      gstin,
       walletAddress,
-      status: "PENDING",
+      approvalStatus: "PENDING",
     });
 
     let txHash = null;
@@ -250,6 +514,75 @@ app.get("/api/providers", (req, res) => {
   }
 });
 
+/**
+ * DELETE /api/provider/:walletAddress
+ * Delete an inactive provider
+ */
+app.delete("/api/provider/:walletAddress", (req, res) => {
+  try {
+    const provider = dataStore.getProviderByWallet(req.params.walletAddress);
+
+    if (!provider) {
+      return res.status(404).json({ error: "Provider not found" });
+    }
+
+    // Check if provider is inactive (no claims for 30 days)
+    const daysSinceLastClaim = provider.lastClaimDate
+      ? (Date.now() - new Date(provider.lastClaimDate)) / (1000 * 60 * 60 * 24)
+      : Infinity;
+
+    if (daysSinceLastClaim < 30) {
+      return res.status(400).json({
+        error: "Cannot delete active provider. Provider must be inactive for 30+ days.",
+      });
+    }
+
+    // Delete provider
+    dataStore.deleteProvider(req.params.walletAddress);
+
+    res.json({
+      success: true,
+      message: "Provider deleted successfully",
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== FILE UPLOAD ROUTES ====================
+
+/**
+ * POST /api/upload
+ * Upload files to IPFS via Pinata
+ */
+app.post("/api/upload", async (req, res) => {
+  try {
+    // For demo purposes, we'll simulate file upload
+    // In production, use multer middleware to handle file uploads
+    
+    const files = req.files || [];
+    const attachments = [];
+
+    // Simulate IPFS upload for each file
+    for (const file of files) {
+      const ipfsHash = `QmSimulated${crypto.randomBytes(16).toString('hex')}`;
+      attachments.push({
+        name: file.originalname || `file_${Date.now()}`,
+        ipfsHash,
+        mimeType: file.mimetype || 'application/octet-stream',
+      });
+    }
+
+    // If no files provided, return empty array
+    res.json({
+      success: true,
+      attachments: attachments.length > 0 ? attachments : [],
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ==================== CLAIM ROUTES ====================
 
 /**
@@ -261,13 +594,13 @@ app.post("/api/claim", async (req, res) => {
     const {
       patientWallet,
       providerWallet,
-      amount,
+      amountInr,
       claimType,
       description,
       attachments,
     } = req.body;
 
-    if (!patientWallet || !providerWallet || !amount || !claimType) {
+    if (!patientWallet || !providerWallet || !amountInr || !claimType) {
       return res.status(400).json({ error: "Missing required fields" });
     }
 
@@ -287,7 +620,7 @@ app.post("/api/claim", async (req, res) => {
     const claimPayload = {
       patientWallet,
       providerWallet,
-      amount,
+      amountInr,
       claimType,
       description,
       attachments: attachments || [],
@@ -306,7 +639,7 @@ app.post("/api/claim", async (req, res) => {
 
     // Evaluate fraud
     const fraudResult = fraudEngine.evaluateClaim(
-      { amount, claimType, description },
+      { amountInr, claimType, description, attachments },
       patient,
       {
         existingPatients,
@@ -366,20 +699,31 @@ app.post("/api/claim", async (req, res) => {
       }
     }
 
+    // Determine claim routing based on fraud score
+    let claimStatus = "PENDING_PROVIDER";
+    let fraudDetectedAt = null;
+    
+    if (fraudResult.fraudScore >= 61) {
+      claimStatus = "ADMIN_REVIEW_REQUIRED";
+      fraudDetectedAt = Date.now();
+    }
+
     // Store claim locally
     const claim = dataStore.createClaim({
       id: claimId,
       patientAddress: patientWallet,
       providerAddress: providerWallet,
-      amount,
+      amountInr,
       claimType,
       description,
+      attachments: attachments || [],
       ipfsHashPayload,
       ipfsHashFraudReport,
       fraudScore: fraudResult.fraudScore,
       fraudLevel: fraudResult.fraudLevel,
       fraudFlags: fraudResult.fraudFlags,
-      status: "PENDING",
+      status: claimStatus,
+      fraudDetectedAt,
     });
 
     res.json({
@@ -432,15 +776,61 @@ app.get("/api/claims/patient/:walletAddress", async (req, res) => {
 
 /**
  * GET /api/claims/provider/:walletAddress
- * Get all claims for a provider
+ * Get all LEGITIMATE claims for a provider (fraud claims go to admin only)
  */
 app.get("/api/claims/provider/:walletAddress", async (req, res) => {
   try {
-    const claims = dataStore.getClaimsByProvider(req.params.walletAddress);
+    const allClaims = dataStore.getClaimsByProvider(req.params.walletAddress);
+
+    // Filter to show only legitimate claims (status === "PENDING_PROVIDER")
+    // Fraud claims (status === "ADMIN_REVIEW_REQUIRED") are NOT shown to providers
+    const legitimateClaims = allClaims.filter(
+      (claim) => claim.status === "PENDING_PROVIDER"
+    );
 
     // Enrich with IPFS data
     const enrichedClaims = await Promise.all(
-      claims.map(async (claim) => {
+      legitimateClaims.map(async (claim) => {
+        const ipfsUrl = ipfsService.getIPFSUrl(claim.ipfsHashPayload);
+        const fraudReportUrl = claim.ipfsHashFraudReport
+          ? ipfsService.getIPFSUrl(claim.ipfsHashFraudReport)
+          : null;
+
+        return {
+          ...claim,
+          ipfsUrl,
+          fraudReportUrl,
+        };
+      })
+    );
+
+    res.json(enrichedClaims);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/claims/admin/fraud-review
+ * Get all fraud claims for admin review
+ * Auto-rejects claims that have exceeded 1 hour timeout
+ */
+app.get("/api/claims/admin/fraud-review", async (req, res) => {
+  try {
+    // Auto-reject fraud claims that have timed out
+    dataStore.autoRejectFraudClaims();
+
+    // Get all claims and filter for admin review
+    const allClaims = dataStore.getAllClaims();
+    const fraudClaims = allClaims.filter(
+      (claim) =>
+        claim.status === "ADMIN_REVIEW_REQUIRED" ||
+        claim.status === "REJECTED_FRAUD"
+    );
+
+    // Enrich with IPFS data
+    const enrichedClaims = await Promise.all(
+      fraudClaims.map(async (claim) => {
         const ipfsUrl = ipfsService.getIPFSUrl(claim.ipfsHashPayload);
         const fraudReportUrl = claim.ipfsHashFraudReport
           ? ipfsService.getIPFSUrl(claim.ipfsHashFraudReport)

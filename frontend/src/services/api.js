@@ -45,6 +45,9 @@ export const getProviderClaims = (walletAddress) =>
 export const getClaimDetails = (claimId) =>
   apiClient.get(`/api/claim/${claimId}`);
 
+export const getClaimById = (claimId) =>
+  apiClient.get(`/api/claim/${claimId}`);
+
 export const approveClaim = (claimId) =>
   apiClient.post(`/api/claim/${claimId}/approve`);
 
@@ -60,6 +63,10 @@ export const getAdminStats = () =>
 
 export const getAllUsers = () =>
   apiClient.get('/api/admin/users');
+
+// Auth APIs
+export const validateAuth = (walletAddress) =>
+  apiClient.get(`/api/auth/validate?walletAddress=${walletAddress}`);
 
 // Health check
 export const healthCheck = () =>

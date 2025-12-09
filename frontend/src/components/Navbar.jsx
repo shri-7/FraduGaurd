@@ -38,7 +38,7 @@ export default function Navbar() {
         <div className="flex justify-between items-center h-16">
           <Link to="/" className="flex items-center space-x-2 font-bold text-xl">
             <Wallet className="w-6 h-6" />
-            <span>InsureChain</span>
+            <span>SecureChain</span>
           </Link>
 
           {/* Desktop Menu */}

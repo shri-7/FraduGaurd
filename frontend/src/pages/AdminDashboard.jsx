@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { getAdminStats, getAllProviders, approveProvider, rejectProvider } from '../services/api';
 import toast from 'react-hot-toast';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
-import { CheckCircle, XCircle, AlertCircle, Shield } from 'lucide-react';
+import { CheckCircle, XCircle, AlertCircle, Shield, Trash2 } from 'lucide-react';
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState(null);
@@ -55,6 +55,36 @@ export default function AdminDashboard() {
     } finally {
       setActionLoading(null);
     }
+  };
+
+  const handleDeleteProvider = async (walletAddress) => {
+    if (!window.confirm('Are you sure you want to delete this provider?')) {
+      return;
+    }
+    setActionLoading(walletAddress);
+    try {
+      // Call delete endpoint
+      const response = await fetch(
+        `${import.meta.env.VITE_API_BASE_URL}/api/provider/${walletAddress}`,
+        { method: 'DELETE' }
+      );
+      if (response.ok) {
+        toast.success('Provider deleted');
+        fetchData();
+      } else {
+        toast.error('Failed to delete provider');
+      }
+    } catch (error) {
+      toast.error('Failed to delete provider');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const isInactive = (lastClaimDate) => {
+    if (!lastClaimDate) return true;
+    const daysSinceLastClaim = (Date.now() - new Date(lastClaimDate)) / (1000 * 60 * 60 * 24);
+    return daysSinceLastClaim > 30;
   };
 
   const getStatusBadge = (status) => {
@@ -234,10 +264,19 @@ export default function AdminDashboard() {
                           Email
                         </th>
                         <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-                          Wallet
+                          GSTIN
                         </th>
                         <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
                           Status
+                        </th>
+                        <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
+                          Approved
+                        </th>
+                        <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
+                          Rejected
+                        </th>
+                        <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
+                          Activity
                         </th>
                         <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
                           Actions
@@ -246,7 +285,7 @@ export default function AdminDashboard() {
                     </thead>
                     <tbody className="divide-y">
                       {providers.map((provider) => (
-                        <tr key={provider.walletAddress} className="hover:bg-gray-50">
+                        <tr key={provider.walletAddress} className={`hover:bg-gray-50 ${isInactive(provider.lastClaimDate) ? 'bg-gray-100' : ''}`}>
                           <td className="px-6 py-4 text-sm text-gray-900 font-medium">
                             {provider.name}
                           </td>
@@ -254,43 +293,69 @@ export default function AdminDashboard() {
                             {provider.contactEmail}
                           </td>
                           <td className="px-6 py-4 text-sm text-gray-900 font-mono">
-                            {provider.walletAddress?.slice(0, 6)}...
-                            {provider.walletAddress?.slice(-4)}
+                            {provider.gstin || 'N/A'}
                           </td>
                           <td className="px-6 py-4">
                             <span
                               className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusBadge(
-                                provider.status
+                                provider.approvalStatus || provider.status
                               )}`}
                             >
-                              {provider.status}
+                              {provider.approvalStatus || provider.status}
                             </span>
                           </td>
-                          <td className="px-6 py-4">
-                            {provider.status === 'PENDING' && (
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={() =>
-                                    handleApproveProvider(provider.walletAddress)
-                                  }
-                                  disabled={actionLoading === provider.walletAddress}
-                                  className="flex items-center gap-1 bg-green-500 hover:bg-green-600 disabled:bg-gray-400 text-white px-3 py-1 rounded text-sm transition"
-                                >
-                                  <CheckCircle className="w-4 h-4" />
-                                  Approve
-                                </button>
-                                <button
-                                  onClick={() =>
-                                    handleRejectProvider(provider.walletAddress)
-                                  }
-                                  disabled={actionLoading === provider.walletAddress}
-                                  className="flex items-center gap-1 bg-red-500 hover:bg-red-600 disabled:bg-gray-400 text-white px-3 py-1 rounded text-sm transition"
-                                >
-                                  <XCircle className="w-4 h-4" />
-                                  Reject
-                                </button>
-                              </div>
+                          <td className="px-6 py-4 text-sm text-green-600 font-semibold">
+                            {provider.approvedCount || 0}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-red-600 font-semibold">
+                            {provider.rejectedCount || 0}
+                          </td>
+                          <td className="px-6 py-4 text-sm">
+                            {isInactive(provider.lastClaimDate) ? (
+                              <span className="text-red-600 font-semibold">INACTIVE</span>
+                            ) : (
+                              <span className="text-green-600 font-semibold">ACTIVE</span>
                             )}
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex gap-2">
+                              {(provider.approvalStatus || provider.status) === 'PENDING' && (
+                                <>
+                                  <button
+                                    onClick={() =>
+                                      handleApproveProvider(provider.walletAddress)
+                                    }
+                                    disabled={actionLoading === provider.walletAddress}
+                                    className="flex items-center gap-1 bg-green-500 hover:bg-green-600 disabled:bg-gray-400 text-white px-3 py-1 rounded text-sm transition"
+                                  >
+                                    <CheckCircle className="w-4 h-4" />
+                                    Approve
+                                  </button>
+                                  <button
+                                    onClick={() =>
+                                      handleRejectProvider(provider.walletAddress)
+                                    }
+                                    disabled={actionLoading === provider.walletAddress}
+                                    className="flex items-center gap-1 bg-red-500 hover:bg-red-600 disabled:bg-gray-400 text-white px-3 py-1 rounded text-sm transition"
+                                  >
+                                    <XCircle className="w-4 h-4" />
+                                    Reject
+                                  </button>
+                                </>
+                              )}
+                              {isInactive(provider.lastClaimDate) && (
+                                <button
+                                  onClick={() =>
+                                    handleDeleteProvider(provider.walletAddress)
+                                  }
+                                  disabled={actionLoading === provider.walletAddress}
+                                  className="flex items-center gap-1 bg-gray-500 hover:bg-gray-600 disabled:bg-gray-400 text-white px-3 py-1 rounded text-sm transition"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                  Delete
+                                </button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       ))}

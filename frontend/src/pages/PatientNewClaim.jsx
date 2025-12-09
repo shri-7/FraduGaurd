@@ -4,7 +4,9 @@ import { useAuthStore } from '../store/authStore';
 import { useForm } from 'react-hook-form';
 import { createClaim, getAllProviders } from '../services/api';
 import toast from 'react-hot-toast';
-import { FileText, AlertCircle, CheckCircle } from 'lucide-react';
+import { FileText, AlertCircle, CheckCircle, Upload } from 'lucide-react';
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000';
 
 export default function PatientNewClaim() {
   const navigate = useNavigate();
@@ -13,6 +15,8 @@ export default function PatientNewClaim() {
   const [loading, setLoading] = useState(false);
   const [providers, setProviders] = useState([]);
   const [claimResult, setClaimResult] = useState(null);
+  const [uploadedFiles, setUploadedFiles] = useState([]);
+  const [uploadingFiles, setUploadingFiles] = useState(false);
 
   React.useEffect(() => {
     fetchProviders();
@@ -21,23 +25,65 @@ export default function PatientNewClaim() {
   const fetchProviders = async () => {
     try {
       const response = await getAllProviders();
-      const approvedProviders = response.data.filter((p) => p.status === 'APPROVED');
+      const approvedProviders = response.data.filter((p) => p.approvalStatus === 'APPROVED');
       setProviders(approvedProviders);
     } catch (error) {
       toast.error('Failed to load providers');
     }
   };
 
+  const handleFileUpload = async (e) => {
+    const files = Array.from(e.target.files);
+    if (files.length === 0) return;
+
+    // Validate file types
+    const validTypes = ['application/pdf', 'image/jpeg', 'image/png'];
+    const invalidFiles = files.filter(f => !validTypes.includes(f.type));
+    
+    if (invalidFiles.length > 0) {
+      toast.error('Only PDF, JPG, and PNG files are allowed');
+      return;
+    }
+
+    setUploadingFiles(true);
+    try {
+      const formData = new FormData();
+      files.forEach(file => formData.append('files', file));
+
+      const response = await fetch(`${API_BASE_URL}/api/upload`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error('Upload failed');
+      }
+
+      const data = await response.json();
+      setUploadedFiles([...uploadedFiles, ...data.attachments]);
+      toast.success(`${files.length} file(s) uploaded successfully`);
+    } catch (error) {
+      toast.error('Failed to upload files');
+    } finally {
+      setUploadingFiles(false);
+    }
+  };
+
   const onSubmit = async (data) => {
+    if (!data.amountInr || parseInt(data.amountInr) <= 0) {
+      toast.error('Please enter a valid amount');
+      return;
+    }
+
     setLoading(true);
     try {
       const response = await createClaim({
         patientWallet: walletAddress,
         providerWallet: data.providerWallet,
-        amount: parseInt(data.amount),
+        amountInr: parseInt(data.amountInr),
         claimType: data.claimType,
         description: data.description,
-        attachments: [],
+        attachments: uploadedFiles,
       });
 
       setClaimResult(response.data);
@@ -114,12 +160,9 @@ export default function PatientNewClaim() {
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
                   <option value="">Select claim type</option>
-                  <option value="HOSPITALIZATION">Hospitalization</option>
-                  <option value="OUTPATIENT">Outpatient</option>
+                  <option value="ACCIDENT">Accident</option>
                   <option value="SURGERY">Surgery</option>
-                  <option value="MEDICATION">Medication</option>
-                  <option value="DIAGNOSTIC">Diagnostic</option>
-                  <option value="OTHER">Other</option>
+                  <option value="HOSPITALIZATION">Hospitalization</option>
                 </select>
                 {errors.claimType && (
                   <p className="text-red-500 text-sm mt-1">
@@ -128,28 +171,29 @@ export default function PatientNewClaim() {
                 )}
               </div>
 
-              {/* Amount */}
+              {/* Amount in INR */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Claim Amount (in Wei) *
+                  Claim Amount (₹ INR) *
                 </label>
                 <input
-                  {...register('amount', {
+                  {...register('amountInr', {
                     required: 'Amount is required',
                     pattern: {
                       value: /^\d+$/,
                       message: 'Amount must be a number',
                     },
                   })}
-                  type="text"
+                  type="number"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="1000000000000000000"
+                  placeholder="50000"
+                  min="1"
                 />
-                {errors.amount && (
-                  <p className="text-red-500 text-sm mt-1">{errors.amount.message}</p>
+                {errors.amountInr && (
+                  <p className="text-red-500 text-sm mt-1">{errors.amountInr.message}</p>
                 )}
                 <p className="text-gray-500 text-sm mt-1">
-                  1 ETH = 1000000000000000000 Wei
+                  Enter amount in Indian Rupees (₹)
                 </p>
               </div>
 
@@ -170,6 +214,49 @@ export default function PatientNewClaim() {
                   <p className="text-red-500 text-sm mt-1">
                     {errors.description.message}
                   </p>
+                )}
+              </div>
+
+              {/* Document Upload */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Supporting Documents (Optional)
+                </label>
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-500 transition">
+                  <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                  <input
+                    type="file"
+                    multiple
+                    onChange={handleFileUpload}
+                    disabled={uploadingFiles}
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    className="hidden"
+                    id="file-upload"
+                  />
+                  <label htmlFor="file-upload" className="cursor-pointer">
+                    <p className="text-sm text-gray-600">
+                      {uploadingFiles ? 'Uploading...' : 'Click to upload or drag and drop'}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      PDF, JPG, PNG (Max 5MB each)
+                    </p>
+                  </label>
+                </div>
+
+                {uploadedFiles.length > 0 && (
+                  <div className="mt-4">
+                    <p className="text-sm font-medium text-gray-700 mb-2">
+                      Uploaded Files ({uploadedFiles.length}):
+                    </p>
+                    <div className="space-y-2">
+                      {uploadedFiles.map((file, idx) => (
+                        <div key={idx} className="flex items-center gap-2 p-2 bg-green-50 rounded border border-green-200">
+                          <CheckCircle className="w-4 h-4 text-green-600" />
+                          <span className="text-sm text-gray-700">{file.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
 

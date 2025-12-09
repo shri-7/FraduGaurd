@@ -30,6 +30,7 @@ function upsertUser(userData) {
     name: userData.name,
     email: userData.email,
     phone: userData.phone,
+    dateOfBirth: userData.dateOfBirth || null,
     nationalId: userData.nationalId,
     nationalIdHash: hashString(userData.nationalId),
     walletAddress: userData.walletAddress,
@@ -79,8 +80,13 @@ function upsertProvider(providerData) {
     id: providerData.id || crypto.randomUUID(),
     name: providerData.name,
     contactEmail: providerData.contactEmail,
+    gstin: providerData.gstin || null,
     walletAddress: providerData.walletAddress,
-    status: providerData.status || "PENDING",
+    approvalStatus: providerData.approvalStatus || "PENDING",
+    inactivityStatus: providerData.inactivityStatus || "ACTIVE",
+    approvedCount: providerData.approvedCount || 0,
+    rejectedCount: providerData.rejectedCount || 0,
+    lastClaimDate: providerData.lastClaimDate || null,
     createdAt: providerData.createdAt || new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
@@ -118,15 +124,29 @@ function getProvidersByStatus(status) {
 }
 
 /**
- * Update provider status
+ * Update provider approval status
  */
-function updateProviderStatus(walletAddress, status) {
+function updateProviderStatus(walletAddress, approvalStatus) {
   const provider = getProviderByWallet(walletAddress);
   if (provider) {
-    provider.status = status;
+    provider.approvalStatus = approvalStatus;
     provider.updatedAt = new Date().toISOString();
   }
   return provider;
+}
+
+/**
+ * Delete provider by wallet
+ */
+function deleteProvider(walletAddress) {
+  const index = providers.findIndex(
+    (p) => p.walletAddress.toLowerCase() === walletAddress.toLowerCase()
+  );
+  if (index >= 0) {
+    providers.splice(index, 1);
+    return true;
+  }
+  return false;
 }
 
 /**
@@ -138,8 +158,10 @@ function createClaim(claimData) {
     patientAddress: claimData.patientAddress,
     providerAddress: claimData.providerAddress,
     amount: claimData.amount,
+    amountInr: claimData.amountInr || claimData.amount,
     claimType: claimData.claimType,
     description: claimData.description,
+    attachments: claimData.attachments || [],
     ipfsHashPayload: claimData.ipfsHashPayload,
     ipfsHashFraudReport: claimData.ipfsHashFraudReport || null,
     fraudScore: claimData.fraudScore || 0,
@@ -224,6 +246,26 @@ function getClaimsStats() {
 }
 
 /**
+ * Auto-reject fraud claims after 1 hour of admin review timeout
+ */
+function autoRejectFraudClaims() {
+  const ONE_HOUR_MS = 3600000;
+  const now = Date.now();
+
+  claims.forEach((claim) => {
+    if (claim.status === "ADMIN_REVIEW_REQUIRED" && claim.fraudDetectedAt) {
+      const timeSinceFraudDetection = now - claim.fraudDetectedAt;
+      
+      if (timeSinceFraudDetection >= ONE_HOUR_MS) {
+        claim.status = "REJECTED_FRAUD";
+        claim.rejectionReason = "Automatically rejected due to prolonged fraud verification timeout.";
+        claim.rejectedAt = now;
+      }
+    }
+  });
+}
+
+/**
  * Clear all data (for testing)
  */
 function clearAllData() {
@@ -242,6 +284,7 @@ module.exports = {
   getAllProviders,
   getProvidersByStatus,
   updateProviderStatus,
+  deleteProvider,
   createClaim,
   getClaimById,
   getClaimsByPatient,
@@ -249,6 +292,7 @@ module.exports = {
   updateClaim,
   getAllClaims,
   getClaimsStats,
+  autoRejectFraudClaims,
   clearAllData,
   hashString,
 };

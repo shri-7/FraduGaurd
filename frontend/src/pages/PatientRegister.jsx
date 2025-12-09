@@ -113,29 +113,56 @@ export default function PatientRegister() {
                 Phone Number *
               </label>
               <input
-                {...register('phone', { required: 'Phone is required' })}
+                {...register('phone', {
+                  required: 'Phone is required',
+                  pattern: {
+                    value: /^[6-9]\d{9}$/,
+                    message: 'Phone must be 10 digits (India format)',
+                  },
+                })}
                 type="tel"
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                placeholder="+1234567890"
+                placeholder="9876543210"
               />
               {errors.phone && (
                 <p className="text-red-500 text-sm mt-1">{errors.phone.message}</p>
               )}
             </div>
 
-            {/* National ID */}
+            {/* National ID / Aadhaar */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 National ID / Aadhaar *
               </label>
               <input
-                {...register('nationalId', { required: 'National ID is required' })}
+                {...register('nationalId', {
+                  required: 'National ID is required',
+                  pattern: {
+                    value: /^\d{12}$|^\d{4}-\d{4}-\d{4}$/,
+                    message: 'Aadhaar must be 12 digits or XXXX-XXXX-XXXX format',
+                  },
+                })}
                 type="text"
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                 placeholder="XXXX-XXXX-XXXX"
               />
               {errors.nationalId && (
                 <p className="text-red-500 text-sm mt-1">{errors.nationalId.message}</p>
+              )}
+            </div>
+
+            {/* Date of Birth */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Date of Birth *
+              </label>
+              <input
+                {...register('dateOfBirth', { required: 'Date of birth is required' })}
+                type="date"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              />
+              {errors.dateOfBirth && (
+                <p className="text-red-500 text-sm mt-1">{errors.dateOfBirth.message}</p>
               )}
             </div>
 

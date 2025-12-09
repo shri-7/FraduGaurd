@@ -99,6 +99,31 @@ export default function ProviderRegister() {
               )}
             </div>
 
+            {/* GSTIN */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                GSTIN (15-digit) *
+              </label>
+              <input
+                {...register('gstin', {
+                  required: 'GSTIN is required',
+                  pattern: {
+                    value: /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/,
+                    message: 'Invalid GSTIN format (15 characters)',
+                  },
+                })}
+                type="text"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                placeholder="27AABCT1234H1Z0"
+                maxLength="15"
+              />
+              {errors.gstin && (
+                <p className="text-red-500 text-sm mt-1">
+                  {errors.gstin.message}
+                </p>
+              )}
+            </div>
+
             <button
               type="submit"
               disabled={loading}
