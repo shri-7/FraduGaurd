@@ -4,6 +4,7 @@ import { getProviderClaims, approveClaim, rejectClaim } from '../services/api';
 import toast from 'react-hot-toast';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { CheckCircle, XCircle, AlertCircle, Clock } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 export default function ProviderDashboard() {
   const { walletAddress } = useAuthStore();
@@ -292,6 +293,12 @@ export default function ProviderDashboard() {
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex gap-2">
+                            <Link
+                              to={`/provider/claims/${claim.id}`}
+                              className="flex items-center gap-1 bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm transition"
+                            >
+                              View
+                            </Link>
                             <button
                               onClick={() => handleApproveClaim(claim.id)}
                               disabled={actionLoading === claim.id}

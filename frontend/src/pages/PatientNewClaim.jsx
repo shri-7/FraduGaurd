@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { useForm } from 'react-hook-form';
-import { createClaim, getAllProviders } from '../services/api';
+import { createClaim, getAllProviders, scoreClaim } from '../services/api';
 import toast from 'react-hot-toast';
 import { FileText, AlertCircle, CheckCircle, Upload } from 'lucide-react';
 
@@ -17,6 +17,7 @@ export default function PatientNewClaim() {
   const [claimResult, setClaimResult] = useState(null);
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const [uploadingFiles, setUploadingFiles] = useState(false);
+  const [predictedRisk, setPredictedRisk] = useState(null);
 
   React.useEffect(() => {
     fetchProviders();
@@ -29,6 +30,41 @@ export default function PatientNewClaim() {
       setProviders(approvedProviders);
     } catch (error) {
       toast.error('Failed to load providers');
+    }
+  };
+
+  const handlePredictRisk = async () => {
+    try {
+      const form = document.querySelector('form');
+      const providerWallet = form?.elements?.providerWallet?.value || '';
+      const claimType = form?.elements?.claimType?.value || '';
+      const amountInr = Number(form?.elements?.amountInr?.value || 0);
+      const description = form?.elements?.description?.value || '';
+
+      if (!providerWallet || !claimType || !amountInr || !description) {
+        toast.error('Fill provider, claim type, amount and description to predict risk');
+        return;
+      }
+
+      const payload = {
+        patientWallet: walletAddress,
+        providerWallet,
+        amountInr,
+        claimType,
+        description,
+        attachments: uploadedFiles,
+        createdAt: new Date().toISOString(),
+      };
+      const res = await scoreClaim(payload);
+      setPredictedRisk({
+        score: res.data?.score,
+        decision: res.data?.decision,
+        explanation: res.data?.explanation || [],
+      });
+      toast.success('Predicted fraud risk computed');
+    } catch (e) {
+      setPredictedRisk(null);
+      toast.error('Could not compute predicted risk');
     }
   };
 
@@ -267,6 +303,33 @@ export default function PatientNewClaim() {
               >
                 {loading ? 'Submitting...' : 'Submit Claim'}
               </button>
+
+              <div className="flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={handlePredictRisk}
+                  className="mt-2 bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2 px-4 rounded-lg transition"
+                >
+                  Predict Fraud Risk (Preview)
+                </button>
+                {predictedRisk && (
+                  <div className="mt-2 text-sm text-gray-700">
+                    <span className="font-semibold">Predicted Score:</span>{' '}
+                    {predictedRisk.score === null || predictedRisk.score === undefined
+                      ? 'N/A'
+                      : `${Math.round(predictedRisk.score * 100)}/100`}
+                    <span className="ml-3 font-semibold">Decision:</span>{' '}
+                    {predictedRisk.decision}
+                    {predictedRisk.explanation?.length > 0 && (
+                      <ul className="list-disc list-inside mt-1">
+                        {predictedRisk.explanation.map((e, i) => (
+                          <li key={i}>{e.feature}: {e.contribution?.toFixed ? e.contribution.toFixed(3) : e.contribution}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </div>
             </form>
           ) : (
             <div className={`p-6 border-2 rounded-lg ${getFraudLevelColor(claimResult.fraudLevel)}`}>

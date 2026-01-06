@@ -7,6 +7,7 @@ const blockchainClient = require("./services/blockchainClient");
 const dataStore = require("./services/dataStore");
 const fraudEngine = require("./services/fraudEngine");
 const ipfsService = require("./services/ipfsService");
+const mlScorer = require("./ml-scorer");
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -14,6 +15,8 @@ const PORT = process.env.PORT || 4000;
 // Middleware
 app.use(cors());
 app.use(express.json());
+// Internal ML router (for diagnostics/local scoring)
+app.use("/internal/ml", mlScorer.router);
 
 // Initialize blockchain on startup
 let blockchainReady = false;
@@ -26,6 +29,12 @@ async function initializeApp() {
   } catch (error) {
     console.warn("Blockchain not ready yet:", error.message);
     blockchainReady = false;
+  }
+  try {
+    await mlScorer.init();
+    console.log("ML scorer initialized");
+  } catch (e) {
+    console.warn("ML scorer not initialized:", e.message);
   }
 }
 
@@ -605,13 +614,22 @@ app.post("/api/claim", async (req, res) => {
     }
 
     // Get patient and provider
-    const patient = dataStore.getUserByWallet(patientWallet);
+    let patient = dataStore.getUserByWallet(patientWallet);
     const provider = dataStore.getProviderByWallet(providerWallet);
 
+    // If patient is not found in the data store, auto-create a minimal
+    // patient record so that claim submission can proceed for demo flows.
     if (!patient) {
-      return res.status(404).json({ error: "Patient not found" });
+      patient = dataStore.upsertUser({
+        role: "PATIENT",
+        name: "Patient",
+        email: `${patientWallet.toLowerCase()}@auto.local`,
+        phone: "0000000000",
+        nationalId: patientWallet,
+        dateOfBirth: null,
+        walletAddress: patientWallet,
+      });
     }
-
     if (!provider) {
       return res.status(404).json({ error: "Provider not found" });
     }
@@ -635,10 +653,34 @@ app.post("/api/claim", async (req, res) => {
 
     // Get patient history for fraud evaluation
     const patientClaims = dataStore.getClaimsByPatient(patientWallet);
+    const providerClaims = dataStore.getClaimsByProvider(providerWallet);
     const existingPatients = dataStore.getAllPatients();
 
-    // Evaluate fraud
-    const fraudResult = fraudEngine.evaluateClaim(
+    // Evaluate ML fraud score (0-1). Fallback to rule-based if ML unavailable.
+    let mlScore01 = null;
+    let mlExplanation = [];
+    try {
+      const mlRes = await mlScorer.scoreClaim({
+        patientWallet,
+        providerWallet,
+        amountInr,
+        claimType,
+        description,
+        attachments: attachments || [],
+        createdAt: new Date().toISOString(),
+      }, {
+        patient,
+        patientClaims,
+        providerClaims,
+      });
+      mlScore01 = mlRes.score01;
+      mlExplanation = (mlRes.details && mlRes.details.top_features) || [];
+    } catch (e) {
+      console.warn("ML scoring failed:", e.message);
+    }
+
+    // Rule-based fraud evaluation (used as fallback and for additional flags)
+    const ruleFraud = fraudEngine.evaluateClaim(
       { amountInr, claimType, description, attachments },
       patient,
       {
@@ -648,12 +690,30 @@ app.post("/api/claim", async (req, res) => {
     );
 
     // Upload fraud report to IPFS
+    // Build fraud report (non-PII). Prefer ML if available, else rule-based.
+    const finalScore01 = mlScore01 !== null ? mlScore01 : (ruleFraud.fraudScore / 100);
+    const finalScore0_100 = Math.round(Math.max(0, Math.min(1, finalScore01)) * 100);
+    const finalLevel = finalScore0_100 >= 61 ? "HIGH" : finalScore0_100 >= 31 ? "MEDIUM" : "LOW";
+    const scoreDigest = crypto
+      .createHash("sha256")
+      .update(JSON.stringify({ s: finalScore0_100, t: Date.now() }))
+      .digest("hex");
+
     const fraudReport = {
-      claimId: null, // Will be set after blockchain creation
-      fraudScore: fraudResult.fraudScore,
-      fraudLevel: fraudResult.fraudLevel,
-      fraudFlags: fraudResult.fraudFlags,
-      reasons: fraudResult.reasons,
+      claimId: null, // set after chain creation
+      modelVersion: (mlScorer.meta() && mlScorer.meta().model_version) || "v0",
+      score01: mlScore01,
+      fraudScore: finalScore0_100,
+      fraudLevel: finalLevel,
+      explanation: mlExplanation, // top-3 features
+      ruleBased: {
+        score: ruleFraud.fraudScore,
+        level: ruleFraud.fraudLevel,
+        flags: ruleFraud.fraudFlags,
+        reasons: ruleFraud.reasons,
+      },
+      features: undefined, // not stored to reduce leakage
+      scoreHash: scoreDigest,
       evaluatedAt: new Date().toISOString(),
     };
 
@@ -672,7 +732,7 @@ app.post("/api/claim", async (req, res) => {
         const createResult = await blockchainClient.createClaim(
           patientWallet,
           providerWallet,
-          amount,
+          amountInr,
           claimType,
           ipfsHashPayload
         );
@@ -689,9 +749,9 @@ app.post("/api/claim", async (req, res) => {
 
         txHashFraud = await blockchainClient.setFraudResultForClaim(
           claimId,
-          fraudResult.fraudScore,
-          fraudLevelMap[fraudResult.fraudLevel],
-          fraudResult.fraudFlags.length > 0,
+          finalScore0_100,
+          fraudLevelMap[finalLevel],
+          (ruleFraud.fraudFlags || []).length > 0 || finalScore0_100 >= 61,
           ipfsHashFraudReport
         );
       } catch (error) {
@@ -703,7 +763,7 @@ app.post("/api/claim", async (req, res) => {
     let claimStatus = "PENDING_PROVIDER";
     let fraudDetectedAt = null;
     
-    if (fraudResult.fraudScore >= 61) {
+    if (finalScore0_100 >= 61) {
       claimStatus = "ADMIN_REVIEW_REQUIRED";
       fraudDetectedAt = Date.now();
     }
@@ -719,9 +779,9 @@ app.post("/api/claim", async (req, res) => {
       attachments: attachments || [],
       ipfsHashPayload,
       ipfsHashFraudReport,
-      fraudScore: fraudResult.fraudScore,
-      fraudLevel: fraudResult.fraudLevel,
-      fraudFlags: fraudResult.fraudFlags,
+      fraudScore: finalScore0_100,
+      fraudLevel: finalLevel,
+      fraudFlags: ruleFraud.fraudFlags || [],
       status: claimStatus,
       fraudDetectedAt,
     });
@@ -729,10 +789,14 @@ app.post("/api/claim", async (req, res) => {
     res.json({
       success: true,
       claim,
-      fraudScore: fraudResult.fraudScore,
-      fraudLevel: fraudResult.fraudLevel,
-      fraudFlags: fraudResult.fraudFlags,
-      reasons: fraudResult.reasons,
+      fraudScore: finalScore0_100,
+      fraudLevel: finalLevel,
+      fraudFlags: ruleFraud.fraudFlags,
+      reasons: ruleFraud.reasons,
+      ml: {
+        score01: mlScore01,
+        explanation: mlExplanation,
+      },
       ipfsHashPayload,
       ipfsHashFraudReport,
       txHashCreate,
@@ -750,6 +814,13 @@ app.post("/api/claim", async (req, res) => {
  */
 app.get("/api/claims/patient/:walletAddress", async (req, res) => {
   try {
+    // Optional privacy enforcement: if requester wallet provided, it must match the patient param
+    const requester = (req.query.walletAddress || req.query.wallet || "").toLowerCase();
+    if (requester) {
+      if (requester !== req.params.walletAddress.toLowerCase()) {
+        return res.status(403).json({ error: "Forbidden: cannot access other patients' claims" });
+      }
+    }
     const claims = dataStore.getClaimsByPatient(req.params.walletAddress);
 
     // Enrich with IPFS data
@@ -780,6 +851,13 @@ app.get("/api/claims/patient/:walletAddress", async (req, res) => {
  */
 app.get("/api/claims/provider/:walletAddress", async (req, res) => {
   try {
+    // Optional privacy enforcement: if requester wallet provided, it must match the provider param
+    const requester = (req.query.walletAddress || req.query.wallet || "").toLowerCase();
+    if (requester) {
+      if (requester !== req.params.walletAddress.toLowerCase()) {
+        return res.status(403).json({ error: "Forbidden: cannot access other providers' claims" });
+      }
+    }
     const allClaims = dataStore.getClaimsByProvider(req.params.walletAddress);
 
     // Filter to show only legitimate claims (status === "PENDING_PROVIDER")
@@ -859,6 +937,16 @@ app.get("/api/claim/:claimId", async (req, res) => {
     const claim = dataStore.getClaimById(req.params.claimId);
     if (!claim) {
       return res.status(404).json({ error: "Claim not found" });
+    }
+
+    // Privacy check: if requester provides a wallet, enforce ownership (patient or provider)
+    const requester = (req.query.walletAddress || req.query.wallet || "").toLowerCase();
+    if (requester) {
+      const isPatient = (claim.patientAddress || "").toLowerCase() === requester;
+      const isProvider = (claim.providerAddress || "").toLowerCase() === requester;
+      if (!isPatient && !isProvider) {
+        return res.status(403).json({ error: "Forbidden: not authorized to view this claim" });
+      }
     }
 
     const ipfsUrl = ipfsService.getIPFSUrl(claim.ipfsHashPayload);

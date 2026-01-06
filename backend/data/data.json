@@ -1,0 +1,89 @@
+{
+  "users": [
+    {
+      "id": "47c1282b-f6a9-4b08-9322-0ada6c950236",
+      "role": "PATIENT",
+      "name": "kiran",
+      "email": "kiran@gmail.com",
+      "phone": "8088165636",
+      "dateOfBirth": "2004-03-02",
+      "nationalId": "3699-2656-6985",
+      "nationalIdHash": "b6dd86942104d18acd15a54f21b3769523ebc6a75bb82d3d93781224ccef8168",
+      "walletAddress": "0x179edcfca47a04142905320902a472305a3205df",
+      "createdAt": "2025-12-15T06:06:52.043Z",
+      "updatedAt": "2025-12-15T06:06:52.043Z"
+    },
+    {
+      "id": "c061fd9d-a126-41ae-aefa-e5691213a33d",
+      "role": "PATIENT",
+      "name": "kiran",
+      "email": "kiran@gmail.com",
+      "phone": "8088165636",
+      "dateOfBirth": "2004-03-02",
+      "nationalId": "3658-1254-3698",
+      "nationalIdHash": "7094bfcfbf5772c826ffc79cfd6dbe2cfe71491a923bdd2273b6c8cdeebb9c8f",
+      "walletAddress": "0x48ed6173384a54be8ac87a6d2494cbbc95ee2cd9",
+      "createdAt": "2026-01-06T09:31:31.818Z",
+      "updatedAt": "2026-01-06T09:31:31.819Z"
+    }
+  ],
+  "providers": [
+    {
+      "id": "469c2d2c-495e-4ff0-9d6e-186336801e13",
+      "name": "LIC",
+      "contactEmail": "lic@gmail.com",
+      "gstin": "27ABCDE1234F2Z5",
+      "walletAddress": "0x69544704a202bcbbf125f55bd2aeb5fb2ccc7ff6",
+      "approvalStatus": "APPROVED",
+      "inactivityStatus": "ACTIVE",
+      "approvedCount": 0,
+      "rejectedCount": 0,
+      "lastClaimDate": null,
+      "createdAt": "2026-01-06T08:18:08.120Z",
+      "updatedAt": "2026-01-06T10:04:40.157Z"
+    }
+  ],
+  "claims": [
+    {
+      "id": "cc41b68c-0c92-4075-acd0-e304faddd997",
+      "patientAddress": "0x48ed6173384a54be8ac87a6d2494cbbc95ee2cd9",
+      "providerAddress": "0x69544704a202bcbbf125f55bd2aeb5fb2ccc7ff6",
+      "amountInr": 60000,
+      "claimType": "ACCIDENT",
+      "description": "minor OT",
+      "attachments": [],
+      "ipfsHashPayload": "QmWW8ACmqbKPSAyXz6jk8viqCobFzu3T9KWXXibzUGxKTg",
+      "ipfsHashFraudReport": "QmZVJVKct19UfuwnYqiBM37RFwpEdQC6iHcTHhMmD2CLWf",
+      "fraudScore": 30,
+      "fraudLevel": "LOW",
+      "fraudFlags": [
+        "HIGH_AMOUNT_50K",
+        "HIGH_RISK_CLAIM_TYPE",
+        "NO_ATTACHMENTS"
+      ],
+      "status": "PENDING_PROVIDER",
+      "createdAt": "2025-12-15T06:46:00.775Z",
+      "updatedAt": "2025-12-15T06:46:00.775Z"
+    },
+    {
+      "id": "038e1a56-bba1-49d7-a24f-84f976532411",
+      "patientAddress": "0x48ed6173384a54be8ac87a6d2494cbbc95ee2cd9",
+      "providerAddress": "0x69544704a202bcbbf125f55bd2aeb5fb2ccc7ff6",
+      "amountInr": 50000,
+      "claimType": "SURGERY",
+      "description": "minor ot",
+      "attachments": [],
+      "ipfsHashPayload": "QmegDTZei6MqkJSbS9qRg3yDf8o8JmZbL1euX9avmmncsu",
+      "ipfsHashFraudReport": "QmPfoJn7QznrVdL5mkpqHcPbxXXXkxMsc34mkPgCnQZKqE",
+      "fraudScore": 20,
+      "fraudLevel": "LOW",
+      "fraudFlags": [
+        "SURGERY_CLAIM",
+        "NO_ATTACHMENTS"
+      ],
+      "status": "PENDING_PROVIDER",
+      "createdAt": "2026-01-06T10:06:37.365Z",
+      "updatedAt": "2026-01-06T10:06:37.365Z"
+    }
+  ]
+}

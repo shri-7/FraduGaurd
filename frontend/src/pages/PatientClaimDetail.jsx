@@ -20,7 +20,7 @@ export default function PatientClaimDetail() {
 
   const fetchClaim = async () => {
     try {
-      const response = await getClaimById(id);
+      const response = await getClaimById(id, walletAddress);
       setClaim(response.data);
     } catch (error) {
       toast.error('Failed to load claim details');

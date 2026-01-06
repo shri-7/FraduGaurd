@@ -1,0 +1,10 @@
+{
+  "thresholds": {
+    "auto_approve_max": 0.30,
+    "manual_review_max": 0.60
+  },
+  "combine": {
+    "rf_weight": 0.6,
+    "ae_weight": 0.4
+  }
+}

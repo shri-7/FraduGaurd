@@ -1,30 +1,59 @@
-# Fraud Detection in Privacy Preserving Health Insurance using Blockchain
+# FraudGaurd – Privacy-Preserving Health Insurance Fraud Detection
 
-A comprehensive blockchain-based system for detecting insurance fraud while preserving patient privacy. This monorepo project combines smart contracts, backend fraud detection algorithms, and a modern React frontend to create a transparent and secure insurance claim processing platform.
+Production-ready demo integrating Solidity smart contracts, a Node/Express backend with ML fraud scoring, and a React frontend. On-chain stores only IPFS hashes and numeric fraud results; sensitive data stays off-chain.
 
-## 🏗️ Architecture Overview
+## 🚀 Quick Start
+
+1) Install
 
 ```
-fraud-insurance-blockchain/
-├── frontend/                 # React + Vite application
-│   ├── src/
-│   │   ├── pages/           # Page components
-│   │   ├── components/      # Reusable components
-│   │   ├── services/        # API and blockchain clients
-│   │   ├── store/           # Zustand state management
-│   │   └── contracts/       # ABI and contract addresses (synced)
-│   └── scripts/
-│       └── sync-abi.cjs     # Syncs contract ABI from backend
-│
-├── backend/                  # Node.js + Express + Hardhat
-│   ├── contracts/           # Solidity smart contracts
-│   ├── scripts/             # Deployment scripts
-│   ├── services/            # Fraud detection, IPFS, blockchain
-│   ├── index.js             # Express server
-│   └── hardhat.config.js    # Hardhat configuration
-│
-└── package.json             # Root workspace configuration
+npm run install:all
 ```
+
+2) Configure env
+
+```
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env
+# backend/.env: GANACHE_RPC_URL, DEPLOYER_PRIVATE_KEY, CHAIN_ID=1337, PINATA_JWT (optional)
+# frontend/.env: VITE_API_BASE_URL=http://localhost:4000
+```
+
+3) Start Ganache (persistent)
+
+```
+npx ganache --chain.chainId 1337 --wallet.deterministic --database .ganache-db
+```
+
+4) Compile & deploy contracts
+
+```
+cd backend
+npm run compile
+npm run deploy
+```
+
+5) Run backend and frontend
+
+```
+cd backend && npm start
+cd frontend && npm run dev
+```
+
+## 🔒 Privacy & Access Control
+
+- Patients can only see their own claims (server-enforced via requester wallet).
+- Providers see legitimate claims for action; fraud-flagged claims are routed to admin review.
+- No PHI is stored on-chain or logged; only hashed references/IPFS hashes are used.
+
+## 🤖 ML Fraud Scoring
+
+- Backend extracts deterministic features and calls an ONNX model; explains top-3 contributing features.
+- Frontend “Predict Fraud Risk (Preview)” is available on the new claim form to preview risk before submitting.
+- Train locally (optional): `cd backend && npm run train:fraud`
+- Detailed data flow and model design: see `dfd.md`.
+
+Note: `integration.md` is deprecated. All critical instructions are consolidated here and in `dfd.md`.
 
 ## 🔑 Key Features
 

@@ -5,11 +5,14 @@
   "main": "index.js",
   "scripts": {
     "compile": "hardhat compile",
-    "test": "hardhat test",
+    "test:hardhat": "hardhat test",
+    "test:ml": "node ml-scorer/tests/run_tests.js",
+    "test": "npm run test:hardhat && npm run test:ml",
     "deploy": "hardhat run scripts/deploy.js",
     "node": "hardhat node",
     "clean": "hardhat clean",
-    "start": "node index.js"
+    "start": "node index.js",
+    "train:fraud": "python ./ml/train_fraud.py --output-dir ./ml-scorer/models"
   },
   "dependencies": {
     "@openzeppelin/contracts": "^4.9.3",
@@ -18,7 +21,8 @@
     "ethers": "^6.9.0",
     "express": "^4.18.2",
     "cors": "^2.8.5",
-    "uuid": "^9.0.1"
+    "uuid": "^9.0.1",
+    "onnxruntime-node": "^1.17.0"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^3.0.0",

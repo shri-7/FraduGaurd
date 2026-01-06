@@ -37,16 +37,16 @@ export const createClaim = (data) =>
   apiClient.post('/api/claim', data);
 
 export const getPatientClaims = (walletAddress) =>
-  apiClient.get(`/api/claims/patient/${walletAddress}`);
+  apiClient.get(`/api/claims/patient/${walletAddress}?walletAddress=${walletAddress}`);
 
 export const getProviderClaims = (walletAddress) =>
-  apiClient.get(`/api/claims/provider/${walletAddress}`);
+  apiClient.get(`/api/claims/provider/${walletAddress}?walletAddress=${walletAddress}`);
 
-export const getClaimDetails = (claimId) =>
-  apiClient.get(`/api/claim/${claimId}`);
+export const getClaimDetails = (claimId, walletAddress) =>
+  apiClient.get(`/api/claim/${claimId}${walletAddress ? `?walletAddress=${walletAddress}` : ''}`);
 
-export const getClaimById = (claimId) =>
-  apiClient.get(`/api/claim/${claimId}`);
+export const getClaimById = (claimId, walletAddress) =>
+  apiClient.get(`/api/claim/${claimId}${walletAddress ? `?walletAddress=${walletAddress}` : ''}`);
 
 export const approveClaim = (claimId) =>
   apiClient.post(`/api/claim/${claimId}/approve`);
@@ -71,5 +71,9 @@ export const validateAuth = (walletAddress) =>
 // Health check
 export const healthCheck = () =>
   apiClient.get('/api/health');
+
+// ML Scoring (internal diagnostic endpoint)
+export const scoreClaim = (payload) =>
+  apiClient.post('/internal/ml/score-claim', payload);
 
 export default apiClient;

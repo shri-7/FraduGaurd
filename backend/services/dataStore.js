@@ -1,4 +1,6 @@
 const crypto = require("crypto");
+const fs = require("fs");
+const path = require("path");
 
 /**
  * In-memory data store for demo purposes
@@ -8,6 +10,51 @@ const crypto = require("crypto");
 let users = [];
 let providers = [];
 let claims = [];
+
+const DATA_DIR = path.join(__dirname, "../data");
+const DATA_FILE = path.join(DATA_DIR, "data.json");
+
+function ensureDataDir() {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+  } catch (_) {}
+}
+
+function loadData() {
+  try {
+    ensureDataDir();
+    if (fs.existsSync(DATA_FILE)) {
+      const raw = fs.readFileSync(DATA_FILE, "utf8");
+      const parsed = JSON.parse(raw);
+      users = Array.isArray(parsed.users) ? parsed.users : [];
+      providers = Array.isArray(parsed.providers) ? parsed.providers : [];
+      claims = Array.isArray(parsed.claims) ? parsed.claims : [];
+    }
+  } catch (e) {
+    // Fallback to empty on any error
+    users = users || [];
+    providers = providers || [];
+    claims = claims || [];
+  }
+}
+
+function saveData() {
+  try {
+    ensureDataDir();
+    fs.writeFileSync(
+      DATA_FILE,
+      JSON.stringify({ users, providers, claims }, null, 2),
+      "utf8"
+    );
+  } catch (e) {
+    // Best-effort persistence; ignore errors
+  }
+}
+
+// Load on module import
+loadData();
 
 /**
  * Hash a string (for national ID)
@@ -40,9 +87,11 @@ function upsertUser(userData) {
 
   if (existingIndex >= 0) {
     users[existingIndex] = { ...users[existingIndex], ...user };
+    saveData();
     return users[existingIndex];
   } else {
     users.push(user);
+    saveData();
     return user;
   }
 }
@@ -93,9 +142,11 @@ function upsertProvider(providerData) {
 
   if (existingIndex >= 0) {
     providers[existingIndex] = { ...providers[existingIndex], ...provider };
+    saveData();
     return providers[existingIndex];
   } else {
     providers.push(provider);
+    saveData();
     return provider;
   }
 }
@@ -131,6 +182,7 @@ function updateProviderStatus(walletAddress, approvalStatus) {
   if (provider) {
     provider.approvalStatus = approvalStatus;
     provider.updatedAt = new Date().toISOString();
+    saveData();
   }
   return provider;
 }
@@ -144,6 +196,7 @@ function deleteProvider(walletAddress) {
   );
   if (index >= 0) {
     providers.splice(index, 1);
+    saveData();
     return true;
   }
   return false;
@@ -173,6 +226,7 @@ function createClaim(claimData) {
   };
 
   claims.push(claim);
+  saveData();
   return claim;
 }
 
@@ -208,6 +262,7 @@ function updateClaim(claimId, updates) {
   const claim = getClaimById(claimId);
   if (claim) {
     Object.assign(claim, updates, { updatedAt: new Date().toISOString() });
+    saveData();
   }
   return claim;
 }
@@ -263,6 +318,7 @@ function autoRejectFraudClaims() {
       }
     }
   });
+  saveData();
 }
 
 /**
@@ -272,6 +328,7 @@ function clearAllData() {
   users = [];
   providers = [];
   claims = [];
+  saveData();
 }
 
 module.exports = {

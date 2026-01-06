@@ -14,6 +14,7 @@ import PatientNewClaim from './pages/PatientNewClaim';
 import PatientClaimDetail from './pages/PatientClaimDetail';
 import ProviderRegister from './pages/ProviderRegister';
 import ProviderDashboard from './pages/ProviderDashboard';
+import ProviderClaimDetail from './pages/ProviderClaimDetail';
 import AdminDashboard from './pages/AdminDashboard';
 
 function App() {
@@ -64,6 +65,14 @@ function App() {
                   <ProviderDashboard />
                 </ProtectedRoute>
               } 
+            />
+            <Route
+              path="/provider/claims/:id"
+              element={
+                <ProtectedRoute requiredRole="PROVIDER">
+                  <ProviderClaimDetail />
+                </ProtectedRoute>
+              }
             />
 
             {/* Admin Routes */}
